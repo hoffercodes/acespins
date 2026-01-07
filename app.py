@@ -10,7 +10,7 @@ app = Flask(__name__)
 # Global dictionary to keep your game sessions alive
 sessions = {}
 
-@app.route('/')
+@app.route('/templates')
 def index():
     # Serves your "Welcome" landing page
     return render_template('dashboard.html')
@@ -63,4 +63,5 @@ def handle_action():
 
 if __name__ == '__main__':
     # Allows mobile devices on your WiFi to connect
+
     app.run(host='0.0.0.0', port=5000, debug=True)
