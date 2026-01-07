@@ -1,9 +1,6 @@
-requests
-pysocks
-beautifulsoup4
-lxml
 flask
-flask-cors
 requests
 beautifulsoup4
+pytesseract
+pillow
 gunicorn
