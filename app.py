@@ -10,21 +10,21 @@ app = Flask(__name__)
 # Global dictionary to keep your game sessions alive
 sessions = {}
 
-@app.route('/templates')
+@app.route('/') # FIXED: This makes it the main page
 def index():
-    # Serves your "Welcome" landing page
-    return render_template('dashboard.html')
+    # FIXED: Changed from dashboard.html to index.html to match your GitHub file
+    return render_template('index.html') 
 
 @app.route('/api/connect', methods=['POST'])
 def connect():
     game_id = request.json.get('game_id')
     try:
         # Calls your looping login_manager.py
-        # This will keep retrying until captcha_solver.py succeeds
         session = login_manager.perform_login()
         if session:
             sessions[game_id] = session
             return jsonify({"status": "success", "message": f"{game_id} Connected!"})
+        return jsonify({"status": "error", "message": "Login failed"}), 401
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 401
 
@@ -35,7 +35,6 @@ def search():
     if game_id not in sessions:
         return jsonify({"error": "Session expired"}), 401
     
-    # Calls data_fetcher.py
     user = data_fetcher.search_user(sessions[game_id], data['query'])
     return jsonify(user) if user else jsonify({"error": "User not found"})
 
@@ -47,7 +46,6 @@ def handle_action():
     if not session: return jsonify({"error": "No Session"}), 401
 
     act = data['action']
-    # Routes to action_handler.py and your specific logic files
     if act == "create_player":
         res = action_handler.create_new_player(session, data['username'], data['password'], data.get('nickname'))
     elif act == "recharge":
@@ -62,6 +60,4 @@ def handle_action():
     return jsonify(res)
 
 if __name__ == '__main__':
-    # Allows mobile devices on your WiFi to connect
-
     app.run(host='0.0.0.0', port=5000, debug=True)
