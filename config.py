@@ -3,8 +3,9 @@
 # --- URLS ---
 BASE_DOMAIN = "https://orionstars.vip:8781"
 LOGIN_URL = f"{BASE_DOMAIN}/default.aspx"
-CAPTCHA_URL = f"{BASE_DOMAIN}/Tools/VerifyImagePage.aspx" # We keep this, it works!
-STORE_URL = f"{BASE_DOMAIN}/Store.aspx" # NEW: The page we see after login
+CAPTCHA_URL = f"{BASE_DOMAIN}/Tools/VerifyImagePage.aspx" 
+# FIX: The page we land on after a successful login
+STORE_URL = f"{BASE_DOMAIN}/Store.aspx" 
 ACCOUNTS_LIST_URL = f"{BASE_DOMAIN}/Module/AccountManager/AccountsList.aspx"
 GRANT_URL = f"{BASE_DOMAIN}/Module/AccountManager/GrantTreasure.aspx"
 
