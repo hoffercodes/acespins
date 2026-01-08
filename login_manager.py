@@ -3,9 +3,14 @@ from bs4 import BeautifulSoup
 import config
 import captcha_solver  
 import time
+import urllib3
+
+# Disable warnings for verify=False
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def perform_login(game_id="orion"):
     session = requests.Session()
+    # 1. Start with CLEAN headers (No Content-Type)
     session.headers.update(config.HEADERS)
     
     print(f"--- STARTING LOGIN FOR {game_id} ---")
@@ -16,28 +21,25 @@ def perform_login(game_id="orion"):
         try:
             print(f"Attempt {attempt} of {MAX_RETRIES}...")
 
-            # 1. Get Login Page
-            # We add verify=False just in case the site has SSL issues
-            resp = session.get(config.LOGIN_URL, timeout=15) # removed verify=False to keep it standard first
+            # 2. Get Login Page (SSL Verify DISABLED)
+            # We disable SSL verify because game servers often have weak certificates
+            resp = session.get(config.LOGIN_URL, timeout=15, verify=False)
             
-            # DEBUG: Print exactly what happened
             print(f"Page Status: {resp.status_code}") 
             
             if resp.status_code != 200:
-                print(f"❌ Site rejected us. Code: {resp.status_code}")
+                print(f"❌ Server rejected us. Code: {resp.status_code}")
                 time.sleep(2)
                 continue
 
             soup = BeautifulSoup(resp.text, 'html.parser')
             
-            # 2. Extract Hidden Fields
             viewstate = soup.find("input", {"id": "__VIEWSTATE"})
             viewstate_gen = soup.find("input", {"id": "__VIEWSTATEGENERATOR"})
             ev_validation = soup.find("input", {"id": "__EVENTVALIDATION"})
 
             if not viewstate:
-                # If we get 200 OK but no fields, maybe it's a "Cloudflare" or "Maintenance" page
-                print(f"❌ Page loaded but form missing. Title: {soup.title.string if soup.title else 'No Title'}")
+                print("❌ Page loaded but form missing.")
                 time.sleep(1)
                 continue
 
@@ -50,7 +52,7 @@ def perform_login(game_id="orion"):
                 time.sleep(1)
                 continue
 
-            # 4. Submit
+            # 4. Prepare Login (Add POST Headers Here)
             payload = {
                 '__VIEWSTATE': viewstate['value'],
                 '__VIEWSTATEGENERATOR': viewstate_gen['value'],
@@ -61,13 +63,25 @@ def perform_login(game_id="orion"):
                 'txtYzm': captcha_code
             }
             
-            post_resp = session.post(config.LOGIN_URL, data=payload, timeout=20)
+            # Add the specific headers needed for form submission
+            post_headers = {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Referer': config.LOGIN_URL,
+                'Origin': config.BASE_DOMAIN
+            }
+            
+            # Update session headers just for this POST
+            session.headers.update(post_headers)
+            
+            post_resp = session.post(config.LOGIN_URL, data=payload, timeout=20, verify=False)
             
             if "Module/AccountManager/AccountsList.aspx" in post_resp.text or post_resp.status_code == 302:
                  print("✅ LOGIN SUCCESS!")
                  return session 
             
             print("❌ Login Failed (Wrong Password/Captcha). Retrying...")
+            # Reset headers for next attempt (remove Content-Type)
+            session.headers = config.HEADERS.copy() 
             time.sleep(2)
             
         except Exception as e:
