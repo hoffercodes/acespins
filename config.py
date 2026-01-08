@@ -11,14 +11,12 @@ GRANT_URL = f"{BASE_DOMAIN}/Module/AccountManager/GrantTreasure.aspx"
 USERNAME = "Antonyos666"
 PASSWORD = "Hotspott123@@"
 
-# --- HEADERS (REAL ANDROID USER-AGENT) ---
-# We switched to Chrome 120 (Current Stable) so the site accepts us.
+# --- HEADERS (CLEAN VERSION) ---
+# We removed 'Content-Type' and 'Host' because they cause 500 Errors on GET requests.
+# We will add them back dynamically in login_manager.py only when needed.
 HEADERS = {
-    'Host': "orionstars.vip:8781",
     'User-Agent': "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
-    'Content-Type': 'application/x-www-form-urlencoded',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-    'Referer': LOGIN_URL,
-    'Origin': BASE_DOMAIN,
-    'Connection': 'keep-alive'
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1'
 }
