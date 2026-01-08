@@ -1,6 +1,6 @@
-
 import React, { useState } from 'react';
-import { createPlayer } from '../services/api';
+// FIXED: Point to '../api' because api.ts is in the src folder, not src/services
+import { createPlayer } from '../api';
 
 interface Props {
   onClose: () => void;
@@ -14,7 +14,11 @@ const CreatePlayerModal: React.FC<Props> = ({ onClose, onSuccess }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const res = await createPlayer(formData);
+    
+    // FIXED: Passing individual arguments to match standard api.ts structure
+    // We use 'account' as the username.
+    const res = await createPlayer(formData.account, formData.password);
+    
     setLoading(false);
     if (res.success) {
       onSuccess(res.message);
@@ -31,26 +35,25 @@ const CreatePlayerModal: React.FC<Props> = ({ onClose, onSuccess }) => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <input 
             required
-            className="w-full bg-[#121212] border border-white/5 rounded-xl p-3 text-sm text-white"
-            placeholder="Account ID"
+            className="w-full bg-[#121212] border border-white/5 rounded-xl p-3 text-sm text-white focus:border-[#007dce] outline-none"
+            placeholder="Account ID (Username)"
             onChange={e => setFormData({...formData, account: e.target.value})}
           />
           <input 
-            required
-            className="w-full bg-[#121212] border border-white/5 rounded-xl p-3 text-sm text-white"
-            placeholder="Nickname"
+            className="w-full bg-[#121212] border border-white/5 rounded-xl p-3 text-sm text-white focus:border-[#007dce] outline-none"
+            placeholder="Nickname (Optional)"
             onChange={e => setFormData({...formData, nickname: e.target.value})}
           />
           <input 
             required
             type="password"
-            className="w-full bg-[#121212] border border-white/5 rounded-xl p-3 text-sm text-white"
+            className="w-full bg-[#121212] border border-white/5 rounded-xl p-3 text-sm text-white focus:border-[#007dce] outline-none"
             placeholder="Password"
             onChange={e => setFormData({...formData, password: e.target.value})}
           />
           <div className="flex gap-2 pt-2">
-            <button type="button" onClick={onClose} className="flex-1 py-3 text-xs font-bold text-gray-500">Cancel</button>
-            <button disabled={loading} className="flex-1 py-3 bg-[#007dce] rounded-xl text-xs font-bold text-white shadow-lg shadow-[#007dce]/20">
+            <button type="button" onClick={onClose} className="flex-1 py-3 text-xs font-bold text-gray-500 hover:text-white">Cancel</button>
+            <button disabled={loading} className="flex-1 py-3 bg-[#007dce] rounded-xl text-xs font-bold text-white shadow-lg shadow-[#007dce]/20 hover:scale-105 transition-all">
               {loading ? 'Creating...' : 'Create'}
             </button>
           </div>
