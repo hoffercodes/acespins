@@ -1,43 +1,65 @@
 from flask import Flask, jsonify, request, make_response
 from flask_cors import CORS 
 import login_manager
+import data_fetcher  # NEW: Import your data fetcher
 import os
 
 app = Flask(__name__)
-
-# Nuclear CORS: Allows your Netlify site to communicate with Render
 CORS(app)
+
+# We need a global variable or a way to store the session after login
+# For a simple version, we'll use a global, but for multi-user, we'd use a store
+active_session = None 
 
 @app.route('/', methods=['GET'])
 def home():
-    # This fixes the "Not Found" error you saw in the browser
     return "AceSpins Multi-Backend Engine: Active", 200
 
-@app.route('/login', methods=['POST', 'OPTIONS'])
+@app.route('/login', methods=['POST'])
 def login_route():
-    if request.method == 'OPTIONS':
-        res = make_response('', 200)
-        res.headers.add("Access-Control-Allow-Origin", "*")
-        res.headers.add("Access-Control-Allow-Methods", "POST, OPTIONS")
-        res.headers.add("Access-Control-Allow-Headers", "Content-Type")
-        return res
-
-    # This MUST appear in your Render logs to prove the link works
-    print("--> 🔔 CONNECTION RECEIVED FROM NETLIFY")
-    
+    global active_session
+    print("--> 🔔 LOGIN REQUEST RECEIVED")
     try:
         data = request.get_json(silent=True) or {}
         game_id = data.get('game_id', 'orion')
         
-        # This triggers the login_manager.py logic you provided earlier
+        # Trigger your login engine
         session = login_manager.perform_login(game_id)
 
         if session:
+            active_session = session # Save session for searching later
+            print("--> ✅ SESSION SAVED")
             return jsonify({"status": "success", "message": "Logged in"}), 200
         else:
             return jsonify({"status": "error", "message": "Login failed"}), 401
     except Exception as e:
-        print(f"--> 💥 SYSTEM ERROR: {str(e)}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/search', methods=['POST'])
+def search_route():
+    global active_session
+    print("--> 🔍 SEARCH REQUEST RECEIVED")
+    
+    if not active_session:
+        print("--> ❌ NO ACTIVE SESSION. LOG IN FIRST.")
+        return jsonify({"status": "error", "message": "Not logged in"}), 401
+
+    try:
+        data = request.get_json(silent=True) or {}
+        target_name = data.get('query') # This matches your api.ts 'query'
+        
+        # Call your data_fetcher.py function
+        player_data = data_fetcher.search_user(active_session, target_name)
+        
+        if player_data:
+            print(f"--> ✅ FOUND PLAYER: {player_data['username']}")
+            return jsonify(player_data), 200
+        else:
+            print("--> ❌ PLAYER NOT FOUND")
+            return jsonify({"status": "error", "message": "User not found"}), 404
+            
+    except Exception as e:
+        print(f"--> 💥 SEARCH ERROR: {str(e)}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
