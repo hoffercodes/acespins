@@ -145,31 +145,3 @@ const App: React.FC = () => {
 };
 
 export default App;
--xl font-black text-[#007dce]">${foundPlayer.credit}</div>
-                </div>
-              </div>
-            )}
-
-            <ActionGrid disabled={!foundPlayer} onAction={onAction} />
-          </div>
-        </div>
-      )}
-
-      {loading && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center">
-          <div className="w-8 h-8 border-4 border-[#007dce] border-t-transparent rounded-full animate-spin"></div>
-        </div>
-      )}
-
-      {toast && (
-        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-[#007dce] text-white px-6 py-2 rounded-full text-xs font-bold shadow-2xl animate-fade-in">
-          {toast}
-        </div>
-      )}
-
-      {showModal && <CreatePlayerModal onClose={() => setShowModal(false)} onSuccess={showToast} />}
-    </div>
-  );
-};
-
-export default App;
