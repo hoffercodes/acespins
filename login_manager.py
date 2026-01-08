@@ -38,7 +38,7 @@ def perform_login(game_id="orion"):
             soup = BeautifulSoup(resp.text, 'html.parser')
             
             # --- STEP A: DETECT FORM ACTION ---
-            # We still check this to be safe, but usually default.aspx posts to itself.
+            # Finds where to send the password (default.aspx or otherwise)
             form_tag = soup.find('form')
             submit_url = config.LOGIN_URL
             
@@ -89,6 +89,7 @@ def perform_login(game_id="orion"):
                 'txtCode': config.USERNAME,
                 'txtPassword': config.PASSWORD,
                 'txtYzm': captcha_code,
+                # Simulate strict button click
                 'btnLogin.x': '45', 
                 'btnLogin.y': '12'
             }
@@ -104,7 +105,7 @@ def perform_login(game_id="orion"):
             post_resp = session.post(submit_url, data=payload, timeout=20, verify=False)
             
             # --- CRITICAL FIX: CHECK FOR 'Store.aspx' ---
-            # If we are redirected to Store.aspx OR verify success via text
+            # If the URL changes to Store.aspx, or the text contains it, we succeeded.
             if "Store.aspx" in post_resp.url or "Store.aspx" in post_resp.text or post_resp.status_code == 302:
                  print("✅ LOGIN SUCCESS! (Redirected to Store)")
                  return session 
