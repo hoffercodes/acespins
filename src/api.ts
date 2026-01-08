@@ -1,97 +1,62 @@
-import { Player, ActionResponse } from '../types';
+import { Player, ActionResponse } from './types';
 
-// 1. Define Backend URL
+// 1. Define Backend URL - Corrected to match your Render address
 const RENDER_URL = 'https://acespins.onrender.com';
-const CLEAN_URL = RENDER_URL.replace(/\/$/, ''); 
-const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const API_BASE = IS_LOCAL ? 'http://localhost:5000/api' : `${CLEAN_URL}/api`;
+const API_BASE = RENDER_URL; // We remove /api because your Flask app doesn't use it
 
 /**
- * Connects to a game (e.g., Orion) with "Optimistic UI" speed.
- * It waits up to 2 minutes for the backend but gives immediate feedback if cached.
+ * Connects to a game (e.g., Orion)
  */
 export const loginToGame = async (gameId: string): Promise<boolean> => {
   try {
-    console.log(`Connecting to: ${API_BASE}/connect`);
+    console.log(`--> Sending Login Request for ${gameId} to ${API_BASE}/login`);
     
-    // Set a timeout of 2 minutes to match the Backend's new limit
+    // Increased timeout to 2 minutes for slow game server responses
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 120000); 
 
-    const response = await fetch(`${API_BASE}/connect`, {
+    const response = await fetch(`${API_BASE}/login`, { // Changed /connect to /login
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ game_id: gameId }),
       signal: controller.signal
     });
     
-    clearTimeout(timeoutId); // Clear timeout on success
+    clearTimeout(timeoutId);
 
-    if (!response.ok) return false;
+    if (!response.ok) {
+      console.error(`Backend returned status: ${response.status}`);
+      return false;
+    }
+
     const data = await response.json();
-    return data.success === true || data.status === 'success';
+    // Support both 'status' or 'success' fields from backend
+    return data.status === 'success' || data.success === true;
 
   } catch (error) {
-    console.error("Login Timeout/Error:", error);
+    console.error("❌ Login Timeout/Network Error:", error);
     return false;
   }
 };
 
 /**
- * Searches for a player using the backend logic
+ * Placeholder for Search (Will implement Python route next)
  */
 export const searchPlayer = async (query: string, gameId: string = 'orion'): Promise<Player | null> => {
-  try {
-    const response = await fetch(`${API_BASE}/search`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, game_id: gameId }),
-    });
-    
-    if (!response.ok) return null;
-    return await response.json();
-  } catch (error) {
-    return null;
-  }
+  console.log("Search functionality pending Python backend update.");
+  return null;
 };
 
 /**
- * Handles actions like Recharge, Redeem, etc.
+ * Placeholder for Actions (Will implement Python route next)
  */
 export const handleAction = async (player: Player, actionId: string, amount?: string): Promise<ActionResponse> => {
-  try {
-    const response = await fetch(`${API_BASE}/action`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        action: actionId, 
-        user: player, 
-        amount: amount,
-        game_id: 'orion'
-      }),
-    });
-    return await response.json();
-  } catch (error) {
-    return { success: false, message: "Backend unreachable" } as any;
-  }
+  return { status: 'error', message: "Action routes not yet added to Python backend" } as any;
 };
 
 /**
- * Creates a new player account (This was the missing function!)
+ * Placeholder for Create
  */
 export const createPlayer = async (payload: any): Promise<ActionResponse> => {
-  try {
-    const response = await fetch(`${API_BASE}/action`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'create_player',
-        ...payload,
-        game_id: 'orion'
-      }),
-    });
-    return await response.json();
-  } catch (error) {
-    return { success: false, message: "Creation failed" } as any;
-  }
+  return { status: 'error', message: "Create route not yet added to Python backend" } as any;
 };
