@@ -4,15 +4,14 @@ import config
 import captcha_solver  
 import time
 import urllib3
+from urllib.parse import urljoin
 
-# Disable "Insecure Request" warnings for cleaner logs
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def perform_login(game_id="orion"):
     session = requests.Session()
     
-    # --- STEP 1: FORCE CLEAN HEADERS (Ignore config.py) ---
-    # We set these manually to guarantee they are perfect for the GET request.
+    # 1. Force Clean Headers
     session.headers = {
         'User-Agent': "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -28,33 +27,32 @@ def perform_login(game_id="orion"):
         try:
             print(f"Attempt {attempt} of {MAX_RETRIES}...")
 
-            # 2. Get Login Page (SSL Verify False prevents handshake errors)
+            # 2. Load Page
             resp = session.get(config.LOGIN_URL, timeout=15, verify=False)
-            
             print(f"Page Status: {resp.status_code}") 
             
             if resp.status_code != 200:
                 print(f"❌ Server rejected us. Code: {resp.status_code}")
-                # If 500 error persists, we print headers to debug
-                if resp.status_code == 500:
-                    print(f"DEBUG Headers Sent: {session.headers}")
                 time.sleep(2)
                 continue
 
             soup = BeautifulSoup(resp.text, 'html.parser')
             
-            # 3. Extract Hidden Fields
-            viewstate = soup.find("input", {"id": "__VIEWSTATE"})
-            viewstate_gen = soup.find("input", {"id": "__VIEWSTATEGENERATOR"})
-            ev_validation = soup.find("input", {"id": "__EVENTVALIDATION"})
+            # 3. AUTO-DETECT CAPTCHA URL (Fixes 404 Error)
+            # We look for an image that contains 'Image.aspx' OR 'yzm' OR 'Code' in the source
+            img_tag = soup.find('img', src=lambda x: x and ('Image.aspx' in x or 'yzm' in x or 'ode' in x))
+            
+            target_captcha_url = config.CAPTCHA_URL # Default fallback
+            
+            if img_tag:
+                # Combine base domain with the found relative path
+                target_captcha_url = urljoin(config.LOGIN_URL, img_tag['src'])
+                print(f"--> Auto-Detected Captcha URL: {target_captcha_url}")
+            else:
+                print("--> ⚠️ Could not auto-detect URL. Using Config default.")
 
-            if not viewstate:
-                print("❌ Page loaded but form missing.")
-                time.sleep(1)
-                continue
-
-            # 4. Solve Captcha
-            captcha_code = captcha_solver.get_captcha_code(session)
+            # 4. Solve Captcha (Using the detected URL)
+            captcha_code = captcha_solver.get_captcha_code(session, target_captcha_url)
             print(f"--> Solved Captcha: {captcha_code}")
 
             if not captcha_code:
@@ -62,7 +60,15 @@ def perform_login(game_id="orion"):
                 time.sleep(1)
                 continue
 
-            # 5. Submit Login (Add Form Headers NOW, not before)
+            # 5. Extract Hidden Fields & Submit
+            viewstate = soup.find("input", {"id": "__VIEWSTATE"})
+            viewstate_gen = soup.find("input", {"id": "__VIEWSTATEGENERATOR"})
+            ev_validation = soup.find("input", {"id": "__EVENTVALIDATION"})
+            
+            if not viewstate:
+                print("❌ Form fields missing.")
+                continue
+
             payload = {
                 '__VIEWSTATE': viewstate['value'],
                 '__VIEWSTATEGENERATOR': viewstate_gen['value'],
@@ -73,7 +79,7 @@ def perform_login(game_id="orion"):
                 'txtYzm': captcha_code
             }
             
-            # We add 'Content-Type' ONLY for this POST request
+            # Add POST headers
             post_headers = {
                 'Content-Type': 'application/x-www-form-urlencoded',
                 'Referer': config.LOGIN_URL,
@@ -87,9 +93,9 @@ def perform_login(game_id="orion"):
                  print("✅ LOGIN SUCCESS!")
                  return session 
             
-            print("❌ Login Failed (Wrong Password/Captcha). Retrying...")
+            print("❌ Login Failed. Retrying...")
             
-            # Reset headers for next attempt (Clear the POST headers)
+            # Reset headers for next loop
             session.headers = {
                 'User-Agent': "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
