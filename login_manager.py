@@ -4,6 +4,7 @@ import config
 import captcha_solver  
 import time
 import urllib3
+import base64
 from urllib.parse import urljoin
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -11,7 +12,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 def perform_login(game_id="orion"):
     session = requests.Session()
     
-    # 1. Force Clean Headers
+    # 1. Clean Headers
     session.headers = {
         'User-Agent': "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -38,21 +39,41 @@ def perform_login(game_id="orion"):
 
             soup = BeautifulSoup(resp.text, 'html.parser')
             
-            # 3. AUTO-DETECT CAPTCHA URL (Fixes 404 Error)
-            # We look for an image that contains 'Image.aspx' OR 'yzm' OR 'Code' in the source
-            img_tag = soup.find('img', src=lambda x: x and ('Image.aspx' in x or 'yzm' in x or 'ode' in x))
+            # --- NEW CAPTCHA FINDER LOGIC ---
+            captcha_bytes = None
+            custom_url = None
             
-            target_captcha_url = config.CAPTCHA_URL # Default fallback
+            # A. Check for Base64 Image (The most likely one!)
+            base64_img = soup.find('img', src=lambda x: x and x.startswith('data:image'))
             
-            if img_tag:
-                # Combine base domain with the found relative path
-                target_captcha_url = urljoin(config.LOGIN_URL, img_tag['src'])
-                print(f"--> Auto-Detected Captcha URL: {target_captcha_url}")
-            else:
-                print("--> ⚠️ Could not auto-detect URL. Using Config default.")
+            if base64_img:
+                print("--> Found Base64 Captcha Image!")
+                try:
+                    # Extract the part after the comma
+                    img_data_str = base64_img['src'].split(',')[1]
+                    captcha_bytes = base64.b64decode(img_data_str)
+                    print("--> Successfully decoded Base64 image.")
+                except Exception as e:
+                    print(f"--> Failed to decode Base64: {e}")
 
-            # 4. Solve Captcha (Using the detected URL)
-            captcha_code = captcha_solver.get_captcha_code(session, target_captcha_url)
+            # B. If no Base64, look for a standard URL (Fallback)
+            if not captcha_bytes:
+                img_tag = soup.find('img', src=lambda x: x and ('Image.aspx' in x or 'yzm' in x or 'ode' in x))
+                if img_tag:
+                    custom_url = urljoin(config.LOGIN_URL, img_tag['src'])
+                    print(f"--> Found Captcha URL: {custom_url}")
+                else:
+                    # C. Last Resort: Try to find ANY image in the main content area
+                    # Sometimes they hide it in a div called 'validate' or 'captcha'
+                    container = soup.find('div', {'id': lambda x: x and ('code' in x.lower() or 'yzm' in x.lower())})
+                    if container:
+                        fallback_img = container.find('img')
+                        if fallback_img:
+                             custom_url = urljoin(config.LOGIN_URL, fallback_img['src'])
+                             print(f"--> Found Captcha in container: {custom_url}")
+
+            # 3. Call Solver (Pass Bytes if we have them, URL if we don't)
+            captcha_code = captcha_solver.get_captcha_code(session, custom_url=custom_url, image_bytes=captcha_bytes)
             print(f"--> Solved Captcha: {captcha_code}")
 
             if not captcha_code:
@@ -60,7 +81,7 @@ def perform_login(game_id="orion"):
                 time.sleep(1)
                 continue
 
-            # 5. Extract Hidden Fields & Submit
+            # 4. Extract & Submit
             viewstate = soup.find("input", {"id": "__VIEWSTATE"})
             viewstate_gen = soup.find("input", {"id": "__VIEWSTATEGENERATOR"})
             ev_validation = soup.find("input", {"id": "__EVENTVALIDATION"})
@@ -79,7 +100,6 @@ def perform_login(game_id="orion"):
                 'txtYzm': captcha_code
             }
             
-            # Add POST headers
             post_headers = {
                 'Content-Type': 'application/x-www-form-urlencoded',
                 'Referer': config.LOGIN_URL,
@@ -95,7 +115,7 @@ def perform_login(game_id="orion"):
             
             print("❌ Login Failed. Retrying...")
             
-            # Reset headers for next loop
+            # Reset headers
             session.headers = {
                 'User-Agent': "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
