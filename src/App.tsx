@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
+// If your types file is named types.ts and is in src/, this is correct:
 import { Player, Game, View } from './types';
-import { loginToGame, searchPlayer, handleAction } from './services/api'; 
+// FIXED IMPORT: Removed 'services/' so it looks for api.ts right here in src/
+import { loginToGame, searchPlayer, handleAction } from './api'; 
 import CreatePlayerModal from './components/CreatePlayerModal';
 import ActionGrid from './components/ActionGrid';
 
