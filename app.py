@@ -5,35 +5,35 @@ import os
 
 app = Flask(__name__)
 
-# This allows your Vercel frontend to talk to this Render backend
-CORS(app)
+# Nuclear CORS: This allows your Netlify site to talk to Render
+CORS(app, supports_credentials=True)
 
-@app.after_request
-def after_request(response):
-    # These headers tell the browser "It is safe to talk to this backend"
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    return response
+@app.route('/', methods=['GET'])
+def home():
+    # This prevents the "Not Found" error you saw
+    return "AceSpins Backend is Active!", 200
 
 @app.route('/login', methods=['POST', 'OPTIONS'])
 def login_route():
-    # Handle the browser's "pre-flight" test request
     if request.method == 'OPTIONS':
-        return make_response('', 200)
+        res = make_response('', 200)
+        res.headers.add("Access-Control-Allow-Origin", "*")
+        res.headers.add("Access-Control-Allow-Methods", "POST, OPTIONS")
+        res.headers.add("Access-Control-Allow-Headers", "Content-Type")
+        return res
 
-    # THIS MUST PRINT IN YOUR RENDER LOGS IF THE CONNECTION IS GOOD
-    print("--> 🔔 DOORBELL RANG: CONNECTION RECEIVED FROM FRONTEND")
+    # THIS LOG MUST APPEAR IN RENDER LOGS
+    print("--> 🔔 CONNECTION RECEIVED FROM NETLIFY")
     
     try:
         data = request.get_json(silent=True) or {}
         game_id = data.get('game_id', 'orion')
         
-        # This calls the perform_login engine in login_manager.py
+        # Trigger the logic in login_manager.py
         session = login_manager.perform_login(game_id)
 
         if session:
-            return jsonify({"status": "success", "message": f"Connected to {game_id}"}), 200
+            return jsonify({"status": "success"}), 200
         else:
             return jsonify({"status": "error", "message": "Login failed"}), 401
     except Exception as e:
