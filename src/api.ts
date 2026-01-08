@@ -1,34 +1,46 @@
 import { Player, ActionResponse } from '../types';
 
-// 1. The exact URL of your live Render backend (Verified from your logs)
+// The exact URL of your live Render backend
 const RENDER_URL = 'https://acespins.onrender.com';
 
-// 2. Local vs Live detection
+// Detects if you are developing on your computer or running live on Vercel
 const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const API_BASE = IS_LOCAL ? 'http://localhost:5000/api' : `${RENDER_URL}/api`;
 
 /**
- * Connects to a game (e.g., Orion) by triggering the login loop
+ * Connects to a game (e.g., Orion)
  */
 export const loginToGame = async (gameId: string): Promise<boolean> => {
   try {
+    console.log(`Attempting to connect to ${gameId} via ${API_BASE}...`); // Debug log
     const response = await fetch(`${API_BASE}/connect`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ game_id: gameId }),
     });
+
     const data = await response.json();
+    console.log("Backend Response:", data); // Check your browser console for this!
+
+    // FIX: Check for 'success' (boolean), NOT 'status' (string)
+    if (data.success === true) {
+      return true;
+    }
     
-    // FIX: Backend returns 'success' (boolean), not 'status' (string)
-    return data.success === true; 
+    // Fallback: If backend uses the old format
+    if (data.status === 'success') {
+      return true;
+    }
+
+    return false;
   } catch (error) {
-    console.error("Login API Error:", error);
+    console.error("Login Error:", error);
     return false;
   }
 };
 
 /**
- * Searches for a player using the data_fetcher.py logic
+ * Searches for a player
  */
 export const searchPlayer = async (query: string, gameId: string = 'orion'): Promise<Player | null> => {
   try {
@@ -39,7 +51,10 @@ export const searchPlayer = async (query: string, gameId: string = 'orion'): Pro
     });
     
     if (!response.ok) return null;
-    return await response.json();
+    const data = await response.json();
+    
+    // Ensure we return the user only if valid
+    return data; 
   } catch (error) {
     return null;
   }
@@ -55,14 +70,13 @@ export const handleAction = async (player: Player, actionId: string, amount?: st
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         action: actionId, 
-        user: player, 
+        user: player,
         amount: amount,
         game_id: 'orion'
       }),
     });
     return await response.json();
   } catch (error) {
-    // FIX: Fallback error now matches backend format
     return { success: false, message: "Backend unreachable" } as any;
   }
 };
