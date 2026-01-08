@@ -22,7 +22,7 @@ def perform_login(game_id="orion"):
     }
     
     print(f"--- STARTING LOGIN FOR {game_id} ---")
-    MAX_RETRIES = 3
+    MAX_RETRIES = 5  # Increased retries because Captcha might fail a few times
     
     for attempt in range(1, MAX_RETRIES + 1):
         try:
@@ -37,11 +37,10 @@ def perform_login(game_id="orion"):
 
             soup = BeautifulSoup(resp.text, 'html.parser')
             
-            # --- CAPTCHA LOGIC ---
+            # --- CAPTCHA FINDER ---
             captcha_bytes = None
             custom_url = None
             
-            # Look for Base64 or URL
             base64_img = soup.find('img', src=lambda x: x and x.startswith('data:image'))
             if base64_img:
                 try:
@@ -52,7 +51,6 @@ def perform_login(game_id="orion"):
                 img_tag = soup.find('img', src=lambda x: x and ('VerifyImagePage' in x or 'Image.aspx' in x or 'yzm' in x))
                 if img_tag:
                     custom_url = urljoin(config.LOGIN_URL, img_tag['src'])
-                    print(f"--> Found Captcha URL: {custom_url}")
                 else:
                     custom_url = config.CAPTCHA_URL
 
@@ -65,7 +63,7 @@ def perform_login(game_id="orion"):
                 time.sleep(1)
                 continue
 
-            # 4. Submit (With "Button Click" Coordinates)
+            # 4. Submit (STRICT BUTTON MODE)
             viewstate = soup.find("input", {"id": "__VIEWSTATE"})
             viewstate_gen = soup.find("input", {"id": "__VIEWSTATEGENERATOR"})
             ev_validation = soup.find("input", {"id": "__EVENTVALIDATION"})
@@ -81,7 +79,8 @@ def perform_login(game_id="orion"):
                 'txtCode': config.USERNAME,
                 'txtPassword': config.PASSWORD,
                 'txtYzm': captcha_code,
-                # FIX: Add coordinates to simulate a real click on the image button
+                # FIX: REMOVED 'btnLogin': 'Login'
+                # We ONLY send coordinates. This is exactly how a real browser clicks an ImageButton.
                 'btnLogin.x': '45', 
                 'btnLogin.y': '12'
             }
@@ -95,14 +94,13 @@ def perform_login(game_id="orion"):
             
             post_resp = session.post(config.LOGIN_URL, data=payload, timeout=20, verify=False)
             
-            # 5. CHECK FOR SUCCESS OR SPECIFIC ERROR
+            # 5. Check Result
             if "Module/AccountManager/AccountsList.aspx" in post_resp.text or post_resp.status_code == 302:
                  print("✅ LOGIN SUCCESS!")
                  return session 
             
-            # DEBUG: Find the error message on the page!
+            # 6. Read Error Message (If Failed)
             error_soup = BeautifulSoup(post_resp.text, 'html.parser')
-            # Look for common error script alerts or spans
             alert_msg = error_soup.find("script", string=lambda x: x and "alert" in x)
             error_span = error_soup.find("span", {"style": lambda x: x and "red" in x})
             
@@ -113,7 +111,6 @@ def perform_login(game_id="orion"):
             else:
                 print(f"❌ Login Failed. Page Title: {error_soup.title.string if error_soup.title else 'Unknown'}")
             
-            # Reset headers
             session.headers = config.HEADERS.copy()
             time.sleep(2)
             
