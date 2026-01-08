@@ -1,5 +1,7 @@
 services:
   - type: web
-    name: acespins-backend
+    name: acespins
     env: docker
     plan: free
+    repo: https://github.com/hoffercodes/acespins
+    branch: main
