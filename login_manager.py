@@ -22,7 +22,7 @@ def perform_login(game_id="orion"):
     }
     
     print(f"--- STARTING LOGIN FOR {game_id} ---")
-    MAX_RETRIES = 5  # Increased retries because Captcha might fail a few times
+    MAX_RETRIES = 5
     
     for attempt in range(1, MAX_RETRIES + 1):
         try:
@@ -37,7 +37,17 @@ def perform_login(game_id="orion"):
 
             soup = BeautifulSoup(resp.text, 'html.parser')
             
-            # --- CAPTCHA FINDER ---
+            # --- STEP A: DETECT FORM ACTION ---
+            # We still check this to be safe, but usually default.aspx posts to itself.
+            form_tag = soup.find('form')
+            submit_url = config.LOGIN_URL
+            
+            if form_tag and form_tag.get('action'):
+                action_link = form_tag.get('action')
+                if action_link and action_link != "#":
+                    submit_url = urljoin(config.LOGIN_URL, action_link)
+            
+            # --- STEP B: CAPTCHA FINDER ---
             captcha_bytes = None
             custom_url = None
             
@@ -63,7 +73,7 @@ def perform_login(game_id="orion"):
                 time.sleep(1)
                 continue
 
-            # 4. Submit (STRICT BUTTON MODE)
+            # 4. Submit
             viewstate = soup.find("input", {"id": "__VIEWSTATE"})
             viewstate_gen = soup.find("input", {"id": "__VIEWSTATEGENERATOR"})
             ev_validation = soup.find("input", {"id": "__EVENTVALIDATION"})
@@ -79,8 +89,6 @@ def perform_login(game_id="orion"):
                 'txtCode': config.USERNAME,
                 'txtPassword': config.PASSWORD,
                 'txtYzm': captcha_code,
-                # FIX: REMOVED 'btnLogin': 'Login'
-                # We ONLY send coordinates. This is exactly how a real browser clicks an ImageButton.
                 'btnLogin.x': '45', 
                 'btnLogin.y': '12'
             }
@@ -92,14 +100,16 @@ def perform_login(game_id="orion"):
             }
             session.headers.update(post_headers)
             
-            post_resp = session.post(config.LOGIN_URL, data=payload, timeout=20, verify=False)
+            print(f"--> Posting to: {submit_url}")
+            post_resp = session.post(submit_url, data=payload, timeout=20, verify=False)
             
-            # 5. Check Result
-            if "Module/AccountManager/AccountsList.aspx" in post_resp.text or post_resp.status_code == 302:
-                 print("✅ LOGIN SUCCESS!")
+            # --- CRITICAL FIX: CHECK FOR 'Store.aspx' ---
+            # If we are redirected to Store.aspx OR verify success via text
+            if "Store.aspx" in post_resp.url or "Store.aspx" in post_resp.text or post_resp.status_code == 302:
+                 print("✅ LOGIN SUCCESS! (Redirected to Store)")
                  return session 
             
-            # 6. Read Error Message (If Failed)
+            # 6. Read Error
             error_soup = BeautifulSoup(post_resp.text, 'html.parser')
             alert_msg = error_soup.find("script", string=lambda x: x and "alert" in x)
             error_span = error_soup.find("span", {"style": lambda x: x and "red" in x})
