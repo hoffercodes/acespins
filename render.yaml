@@ -1,10 +1,5 @@
 services:
   - type: web
     name: acespins-backend
-    env: python
+    env: docker
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
-    buildpacks:
-      - key: https://github.com/render-inc/render-buildpack-chrome
-      - key: python
