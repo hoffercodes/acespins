@@ -3,8 +3,8 @@
 # --- URLS ---
 BASE_DOMAIN = "https://orionstars.vip:8781"
 LOGIN_URL = f"{BASE_DOMAIN}/default.aspx"
-# FIX: The file you uploaded proves THIS is the real captcha location
-CAPTCHA_URL = f"{BASE_DOMAIN}/VerifyImagePage.aspx" 
+CAPTCHA_URL = f"{BASE_DOMAIN}/Tools/VerifyImagePage.aspx" # We keep this, it works!
+STORE_URL = f"{BASE_DOMAIN}/Store.aspx" # NEW: The page we see after login
 ACCOUNTS_LIST_URL = f"{BASE_DOMAIN}/Module/AccountManager/AccountsList.aspx"
 GRANT_URL = f"{BASE_DOMAIN}/Module/AccountManager/GrantTreasure.aspx"
 
