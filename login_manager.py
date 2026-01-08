@@ -10,36 +10,40 @@ def perform_login(game_id="orion"):
     
     print(f"--- STARTING LOGIN FOR {game_id} ---")
 
-    # FIX: Only try 5 times. Do NOT loop forever.
-    MAX_RETRIES = 5
+    # CONFIG: How many times to try before giving up?
+    # 3 attempts is safe for a 120s timeout limit.
+    MAX_RETRIES = 3
     
+    # 🔄 THE RETRY LOOP
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            print(f"Attempt {attempt}/{MAX_RETRIES}...")
+            print(f"Attempt {attempt} of {MAX_RETRIES}...")
 
-            # 1. Get Login Page
+            # 1. Get Login Page (with timeout)
             resp = session.get(config.LOGIN_URL, timeout=10)
             soup = BeautifulSoup(resp.text, 'html.parser')
             
+            # 2. Extract Hidden Fields
             viewstate = soup.find("input", {"id": "__VIEWSTATE"})
             viewstate_gen = soup.find("input", {"id": "__VIEWSTATEGENERATOR"})
             ev_validation = soup.find("input", {"id": "__EVENTVALIDATION"})
 
             if not viewstate:
-                print("❌ Failed to load login page. Retrying...")
+                print("❌ Failed to load page. Retrying...")
                 time.sleep(1)
                 continue
 
-            # 2. Solve Captcha
+            # 3. Solve Captcha (Using your fast solver)
             captcha_code = captcha_solver.get_captcha_code(session)
-            print(f"--> Solved Captcha: {captcha_code}")
             
             if not captcha_code:
-                print("❌ Captcha empty. Retrying...")
+                print("❌ Captcha empty/unreadable. Retrying...")
                 time.sleep(1)
                 continue
 
-            # 3. Send Login Request
+            print(f"--> Submitting Code: {captcha_code}")
+
+            # 4. Submit Credentials
             payload = {
                 '__VIEWSTATE': viewstate['value'],
                 '__VIEWSTATEGENERATOR': viewstate_gen['value'],
@@ -50,20 +54,22 @@ def perform_login(game_id="orion"):
                 'txtYzm': captcha_code
             }
             
+            # Post with a 15-second timeout
             post_resp = session.post(config.LOGIN_URL, data=payload, timeout=15)
             
-            # 4. Check Success
+            # 5. Check Success
+            # If we see the "AccountsList" page, we are IN!
             if "Module/AccountManager/AccountsList.aspx" in post_resp.text or post_resp.status_code == 302:
                  print("✅ LOGIN SUCCESS!")
                  return session 
             
             print("❌ Login Failed (Wrong Password or Captcha). Retrying...")
-            time.sleep(2)
+            time.sleep(2) # Wait a bit before next attempt
             
         except Exception as e:
-            print(f"❌ Error: {e}")
+            print(f"❌ Network/Script Error: {e}")
             time.sleep(2)
     
-    # If we run out of tries, return None instead of crashing
-    print("❌ ALL ATTEMPTS FAILED. STOPPING.")
+    # If the loop finishes without returning, we failed.
+    print("❌ ALL RETRIES FAILED.")
     return None
