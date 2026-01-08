@@ -13,13 +13,7 @@ def perform_login(game_id="orion"):
     session = requests.Session()
     
     # 1. Clean Headers
-    session.headers = {
-        'User-Agent': "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1'
-    }
+    session.headers = config.HEADERS.copy()
     
     print(f"--- STARTING LOGIN FOR {game_id} ---")
     MAX_RETRIES = 5
@@ -37,17 +31,15 @@ def perform_login(game_id="orion"):
 
             soup = BeautifulSoup(resp.text, 'html.parser')
             
-            # --- STEP A: DETECT FORM ACTION ---
-            # Finds where to send the password (default.aspx or otherwise)
+            # --- FORM ACTION DETECTION ---
             form_tag = soup.find('form')
             submit_url = config.LOGIN_URL
-            
             if form_tag and form_tag.get('action'):
                 action_link = form_tag.get('action')
                 if action_link and action_link != "#":
                     submit_url = urljoin(config.LOGIN_URL, action_link)
             
-            # --- STEP B: CAPTCHA FINDER ---
+            # --- CAPTCHA FINDER ---
             captcha_bytes = None
             custom_url = None
             
@@ -82,6 +74,8 @@ def perform_login(game_id="orion"):
                 print("❌ Form fields missing.")
                 continue
 
+            # FIX: The "Kitchen Sink" Payload
+            # We send Name + Coordinates to ensure the server registers the click.
             payload = {
                 '__VIEWSTATE': viewstate['value'],
                 '__VIEWSTATEGENERATOR': viewstate_gen['value'],
@@ -89,9 +83,9 @@ def perform_login(game_id="orion"):
                 'txtCode': config.USERNAME,
                 'txtPassword': config.PASSWORD,
                 'txtYzm': captcha_code,
-                # Simulate strict button click
-                'btnLogin.x': '45', 
-                'btnLogin.y': '12'
+                'btnLogin': 'Login',  # Added back!
+                'btnLogin.x': '45',   # Kept!
+                'btnLogin.y': '12'    # Kept!
             }
             
             post_headers = {
@@ -104,8 +98,7 @@ def perform_login(game_id="orion"):
             print(f"--> Posting to: {submit_url}")
             post_resp = session.post(submit_url, data=payload, timeout=20, verify=False)
             
-            # --- CRITICAL FIX: CHECK FOR 'Store.aspx' ---
-            # If the URL changes to Store.aspx, or the text contains it, we succeeded.
+            # 5. Check Success
             if "Store.aspx" in post_resp.url or "Store.aspx" in post_resp.text or post_resp.status_code == 302:
                  print("✅ LOGIN SUCCESS! (Redirected to Store)")
                  return session 
