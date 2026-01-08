@@ -39,40 +39,35 @@ def perform_login(game_id="orion"):
 
             soup = BeautifulSoup(resp.text, 'html.parser')
             
-            # --- NEW CAPTCHA FINDER LOGIC ---
+            # --- CAPTCHA FINDER LOGIC ---
             captcha_bytes = None
             custom_url = None
             
-            # A. Check for Base64 Image (The most likely one!)
+            # A. Check for Base64 Image
             base64_img = soup.find('img', src=lambda x: x and x.startswith('data:image'))
             
             if base64_img:
                 print("--> Found Base64 Captcha Image!")
                 try:
-                    # Extract the part after the comma
                     img_data_str = base64_img['src'].split(',')[1]
                     captcha_bytes = base64.b64decode(img_data_str)
-                    print("--> Successfully decoded Base64 image.")
                 except Exception as e:
                     print(f"--> Failed to decode Base64: {e}")
 
-            # B. If no Base64, look for a standard URL (Fallback)
+            # B. If no Base64, look for the correct URL pattern
             if not captcha_bytes:
-                img_tag = soup.find('img', src=lambda x: x and ('Image.aspx' in x or 'yzm' in x or 'ode' in x))
+                # FIX: Added 'VerifyImagePage' to the search list!
+                img_tag = soup.find('img', src=lambda x: x and ('VerifyImagePage' in x or 'Image.aspx' in x or 'yzm' in x))
+                
                 if img_tag:
                     custom_url = urljoin(config.LOGIN_URL, img_tag['src'])
                     print(f"--> Found Captcha URL: {custom_url}")
                 else:
-                    # C. Last Resort: Try to find ANY image in the main content area
-                    # Sometimes they hide it in a div called 'validate' or 'captcha'
-                    container = soup.find('div', {'id': lambda x: x and ('code' in x.lower() or 'yzm' in x.lower())})
-                    if container:
-                        fallback_img = container.find('img')
-                        if fallback_img:
-                             custom_url = urljoin(config.LOGIN_URL, fallback_img['src'])
-                             print(f"--> Found Captcha in container: {custom_url}")
+                    # Fallback to Config (which is now correct!)
+                    custom_url = config.CAPTCHA_URL
+                    print(f"--> Using Config URL: {custom_url}")
 
-            # 3. Call Solver (Pass Bytes if we have them, URL if we don't)
+            # 3. Call Solver
             captcha_code = captcha_solver.get_captcha_code(session, custom_url=custom_url, image_bytes=captcha_bytes)
             print(f"--> Solved Captcha: {captcha_code}")
 
