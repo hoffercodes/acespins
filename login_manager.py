@@ -1,4 +1,3 @@
-# login_manager.py
 import requests
 from bs4 import BeautifulSoup
 import config
@@ -6,67 +5,65 @@ import captcha_solver
 import time
 
 def perform_login(game_id="orion"):
-    """
-    Attempts to login in a loop until successful.
-    Returns: requests.Session object once authenticated.
-    """
-    # 1. FIX: Create the session object explicitly here
-    # (This prevents the 'str object has no attribute headers' crash)
     session = requests.Session()
     session.headers.update(config.HEADERS)
     
-    print(f"Starting login for {game_id}...")
+    print(f"--- STARTING LOGIN FOR {game_id} ---")
 
-    # Start the Auto-Retry Loop
-    while True:
+    # FIX: Only try 5 times. Do NOT loop forever.
+    MAX_RETRIES = 5
+    
+    for attempt in range(1, MAX_RETRIES + 1):
         try:
-            # A. Get Login Page
+            print(f"Attempt {attempt}/{MAX_RETRIES}...")
+
+            # 1. Get Login Page
             resp = session.get(config.LOGIN_URL, timeout=10)
             soup = BeautifulSoup(resp.text, 'html.parser')
             
-            # B. Extract Hidden Form Fields
-            viewstate_tag = soup.find("input", {"id": "__VIEWSTATE"})
-            viewstate_gen_tag = soup.find("input", {"id": "__VIEWSTATEGENERATOR"})
-            ev_tag = soup.find("input", {"id": "__EVENTVALIDATION"})
-            
-            if not viewstate_tag: 
+            viewstate = soup.find("input", {"id": "__VIEWSTATE"})
+            viewstate_gen = soup.find("input", {"id": "__VIEWSTATEGENERATOR"})
+            ev_validation = soup.find("input", {"id": "__EVENTVALIDATION"})
+
+            if not viewstate:
+                print("❌ Failed to load login page. Retrying...")
                 time.sleep(1)
                 continue
 
-            # C. CALL THE CAPTCHA SOLVER
-            # This uses the new captcha_solver.py you just uploaded
+            # 2. Solve Captcha
             captcha_code = captcha_solver.get_captcha_code(session)
+            print(f"--> Solved Captcha: {captcha_code}")
             
             if not captcha_code:
-                print("Captcha failed, retrying...")
+                print("❌ Captcha empty. Retrying...")
                 time.sleep(1)
                 continue
 
-            # D. Submit the Login Form
+            # 3. Send Login Request
             payload = {
-                '__VIEWSTATE': viewstate_tag['value'],
-                '__VIEWSTATEGENERATOR': viewstate_gen_tag['value'],
-                '__EVENTVALIDATION': ev_tag['value'] if ev_tag else "",
+                '__VIEWSTATE': viewstate['value'],
+                '__VIEWSTATEGENERATOR': viewstate_gen['value'],
+                '__EVENTVALIDATION': ev_validation['value'] if ev_validation else "",
                 'txtCode': config.USERNAME,
                 'txtPassword': config.PASSWORD,
                 'btnLogin': 'Login',
-                'txtYzm': captcha_code # The solved code
+                'txtYzm': captcha_code
             }
             
-            post_resp = session.post(config.LOGIN_URL, data=payload, timeout=10)
+            post_resp = session.post(config.LOGIN_URL, data=payload, timeout=15)
             
-            # E. Check if Login Worked
-            if config.ACCOUNTS_LIST_URL in post_resp.url or \
-               "Module/AccountManager/AccountsList.aspx" in post_resp.text or \
-               post_resp.status_code == 302:
-                 print("Login Successful!")
+            # 4. Check Success
+            if "Module/AccountManager/AccountsList.aspx" in post_resp.text or post_resp.status_code == 302:
+                 print("✅ LOGIN SUCCESS!")
                  return session 
             
-            # If we are here, login failed (probably wrong captcha)
-            print("Login failed (Wrong Captcha?), retrying...")
-            time.sleep(1)
+            print("❌ Login Failed (Wrong Password or Captcha). Retrying...")
+            time.sleep(2)
             
         except Exception as e:
-            print(f"Network Error: {e}")
+            print(f"❌ Error: {e}")
             time.sleep(2)
-            continue
+    
+    # If we run out of tries, return None instead of crashing
+    print("❌ ALL ATTEMPTS FAILED. STOPPING.")
+    return None
