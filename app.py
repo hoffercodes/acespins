@@ -15,27 +15,21 @@ sessions = {}
 
 @app.route('/')
 def home():
-    # Simple message so you know the server is running
-    return "Backend is running. Frontend is hosted on Vercel."
+    return "Backend is running. Frontend is on Vercel."
 
 @app.route('/api/connect', methods=['POST'])
 def connect():
     data = request.json
     game_id = data.get('game_id', 'orion')
     try:
-        # Pass game_id if your login_manager supports it
+        # Attempt login
         session = login_manager.perform_login(game_id) if hasattr(login_manager, 'perform_login') and login_manager.perform_login.__code__.co_argcount > 0 else login_manager.perform_login()
-        
+
         if session:
             sessions[game_id] = session
-            # Respond with 'success: True' for the React Frontend
-            return jsonify({
-                "success": True, 
-                "message": f"{game_id.capitalize()} Connected Successfully!"
-            })
-        return jsonify({"success": False, "message": "Login failed (Server could not launch browser)"}), 401
+            return jsonify({"success": True, "message": f"{game_id.capitalize()} Connected!"})
+        return jsonify({"success": False, "message": "Login failed"}), 401
     except Exception as e:
-        print(f"Error: {e}")
         return jsonify({"success": False, "message": str(e)}), 500
 
 @app.route('/api/search', methods=['POST'])
@@ -43,11 +37,11 @@ def search():
     data = request.json
     game_id = data.get('game_id', 'orion')
     query = data.get('query')
-
     session = sessions.get(game_id)
+
     if not session:
         return jsonify({"success": False, "message": "Session expired."}), 401
-    
+
     user = data_fetcher.search_user(session, query)
     if user:
         user['success'] = True
@@ -59,26 +53,27 @@ def handle_action():
     data = request.json
     game_id = data.get('game_id', 'orion')
     session = sessions.get(game_id)
-    
+
     if not session: 
         return jsonify({"success": False, "message": "Session expired."}), 401
 
     act = data.get('action')
     try:
         if act == "create_player":
-            res = action_handler.create_new_player(
-                session, data.get('username'), data.get('password'), data.get('nickname')
-            )
-        elif act in ["recharge", "redeem", "ban", "unbind", "resetpass"]:
-             # Map other actions here
-             if act == "recharge": res = action_handler.recharge(session, data.get('user'), data.get('amount'))
-             elif act == "redeem": res = action_handler.redeem(session, data.get('user'), data.get('amount'))
-             elif act == "ban": res = action_handler.ban_unban(session, data.get('user'))
-             elif act == "unbind": res = action_handler.unbind_device(session, data.get('user'))
-             elif act == "resetpass": res = action_handler.reset_password(session, data.get('user'), data.get('password'))
+            res = action_handler.create_new_player(session, data.get('username'), data.get('password'), data.get('nickname'))
+        elif act == "recharge":
+            res = action_handler.recharge(session, data.get('user'), data.get('amount'))
+        elif act == "redeem":
+            res = action_handler.redeem(session, data.get('user'), data.get('amount'))
+        elif act == "ban":
+            res = action_handler.ban_unban(session, data.get('user'))
+        elif act == "unbind":
+            res = action_handler.unbind_device(session, data.get('user'))
+        elif act == "resetpass":
+            res = action_handler.reset_password(session, data.get('user'), data.get('password'))
         else:
             return jsonify({"success": False, "message": "Invalid action"}), 400
-            
+
         return jsonify(res)
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
