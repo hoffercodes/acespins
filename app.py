@@ -1,50 +1,54 @@
 from flask import Flask, jsonify, request
-from flask_cors import CORS
+from flask_cors import CORS  # Import the fix
 import login_manager
-import data_fetcher
-import action_handler
 import os
-import time
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
-# GLOBAL SESSION STORAGE (Keeps the bot logged in!)
-active_session = None
-last_login_time = 0
+# 1. ENABLE CORS (Allow Vercel to talk to Render)
+# This fixes the "Network Error" on the frontend
+CORS(app)
 
-@app.route('/')
+@app.route('/', methods=['GET'])
 def home():
-    return "Backend is Live & Fast!"
+    return "Backend is Live! Use POST /login to start."
 
-@app.route('/api/connect', methods=['POST', 'OPTIONS'])
-def connect():
-    global active_session, last_login_time
-    if request.method == 'OPTIONS':
-        return jsonify({'status': 'ok'}), 200
+@app.route('/login', methods=['POST'])
+def login_route():
+    # 2. DEBUG PRINT (The Doorbell)
+    # This proves the connection reached the server
+    print("--> 🔔 RECEIVED LOGIN REQUEST FROM FRONTEND!")
 
-    # 1. INSTANT CHECK: Are we already logged in?
-    # If less than 10 minutes passed, reuse the old session!
-    if active_session and (time.time() - last_login_time < 600):
-        print("⚡ Using CACHED Session (Fast Login)")
-        return jsonify({"success": True, "message": "Instant Login"}), 200
-
-    # 2. SLOW LOGIN (Only happens once every 10 mins)
     try:
-        data = request.json
+        # Get data from frontend (if any)
+        data = request.get_json(silent=True) or {}
         game_id = data.get('game_id', 'orion')
-        session = login_manager.perform_login(game_id)
-        
-        if session:
-            active_session = session # Save it!
-            last_login_time = time.time()
-            return jsonify({"success": True, "message": "Fresh Login"}), 200
-        
-        return jsonify({"success": False, "message": "Login failed"}), 401
-    except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
 
-# ... (Keep search and action routes the same) ...
+        print(f"--> Starting Login Process for: {game_id}")
+
+        # Run the Login Manager (The code we just fixed)
+        session = login_manager.perform_login(game_id)
+
+        if session:
+            # Login Success
+            print("--> ✅ RETURNING SUCCESS TO FRONTEND")
+            return jsonify({
+                "status": "success", 
+                "message": "Login Successful!", 
+                "redirect": "Store.aspx"
+            }), 200
+        else:
+            # Login Failed (Retries exhausted)
+            print("--> ❌ RETURNING FAILURE TO FRONTEND")
+            return jsonify({
+                "status": "error", 
+                "message": "Login Failed after multiple attempts."
+            }), 401
+
+    except Exception as e:
+        print(f"--> 💥 CRITICAL SERVER ERROR: {str(e)}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
