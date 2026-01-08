@@ -1,13 +1,13 @@
 from flask import Flask, jsonify, request
-from flask_cors import CORS  # Import the fix
+from flask_cors import CORS 
 import login_manager
 import os
 
 app = Flask(__name__)
 
-# 1. ENABLE CORS (Allow Vercel to talk to Render)
-# This fixes the "Network Error" on the frontend
-CORS(app)
+# 1. HARDENED CORS SETTINGS
+# We are specifically allowing your Vercel frontend to talk to this backend.
+CORS(app, resources={r"/*": {"origins": ["https://acespins.vercel.app", "http://localhost:3000"]}})
 
 @app.route('/', methods=['GET'])
 def home():
@@ -15,38 +15,26 @@ def home():
 
 @app.route('/login', methods=['POST'])
 def login_route():
-    # 2. DEBUG PRINT (The Doorbell)
-    # This proves the connection reached the server
-    print("--> 🔔 RECEIVED LOGIN REQUEST FROM FRONTEND!")
+    # THIS MUST SHOW UP IN LOGS IF CONNECTION IS GOOD
+    print("--> 🔔 DOORBELL RANG: RECEIVED REQUEST FROM FRONTEND!")
 
     try:
-        # Get data from frontend (if any)
         data = request.get_json(silent=True) or {}
         game_id = data.get('game_id', 'orion')
+        print(f"--> User wants to log into: {game_id}")
 
-        print(f"--> Starting Login Process for: {game_id}")
-
-        # Run the Login Manager (The code we just fixed)
+        # Call the relay to login_manager.py
         session = login_manager.perform_login(game_id)
 
         if session:
-            # Login Success
-            print("--> ✅ RETURNING SUCCESS TO FRONTEND")
-            return jsonify({
-                "status": "success", 
-                "message": "Login Successful!", 
-                "redirect": "Store.aspx"
-            }), 200
+            print("--> ✅ SUCCESS: Sending 200 OK back to Website")
+            return jsonify({"status": "success", "message": "Logged in!"}), 200
         else:
-            # Login Failed (Retries exhausted)
-            print("--> ❌ RETURNING FAILURE TO FRONTEND")
-            return jsonify({
-                "status": "error", 
-                "message": "Login Failed after multiple attempts."
-            }), 401
+            print("--> ❌ FAILURE: Sending 401 back to Website")
+            return jsonify({"status": "error", "message": "Login failed"}), 401
 
     except Exception as e:
-        print(f"--> 💥 CRITICAL SERVER ERROR: {str(e)}")
+        print(f"--> 💥 ERROR: {str(e)}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
