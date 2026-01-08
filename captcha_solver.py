@@ -5,9 +5,12 @@ import requests
 import config
 from PIL import Image, ImageOps, ImageFilter
 import pytesseract
+import os
 
-# Set Tesseract path for Windows (Adjust if your path is different)
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+# FIX: Only set the path if we are on Windows (Local Testing)
+# On Render (Linux), this is NOT needed because Tesseract is in the global PATH.
+if os.name == 'nt':
+    pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 def get_captcha_code(session):
     """
