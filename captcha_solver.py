@@ -1,42 +1,46 @@
-from PIL import Image, ImageOps, ImageEnhance, ImageFilter
 import io
 import pytesseract
+from PIL import Image, ImageEnhance, ImageOps
 
 def get_captcha_code(session, custom_url=None, image_bytes=None):
+    """
+    Downloads and cleans the image for Tesseract digit recognition.
+    """
     try:
+        # 1. Load Image
         if image_bytes:
             img = Image.open(io.BytesIO(image_bytes))
         else:
-            resp = session.get(custom_url, timeout=10, verify=False)
+            # Must use the same session to get the correct captcha image
+            resp = session.get(custom_url, verify=False, timeout=10)
             img = Image.open(io.BytesIO(resp.content))
 
-        # --- PRE-PROCESSING FOR 5-DIGIT ACCURACY ---
-        img = img.convert("L")  # Grayscale
+        # 2. Advanced Pre-Processing for Orion Stars
+        img = img.convert("L")  # Convert to Grayscale
         
-        # 1. Increase Contrast & Sharpness
+        # Boost Contrast (Makes noise fade and digits dark)
         img = ImageEnhance.Contrast(img).enhance(2.5)
-        img = ImageEnhance.Sharpness(img).enhance(2.0)
         
-        # 2. Scale up (Tesseract handles larger images better)
+        # Scale up (Tesseract is much more accurate with larger text)
         img = img.resize((img.width * 3, img.height * 3), Image.Resampling.LANCZOS)
         
-        # 3. Threshold (Pure Black & White)
-        # This kills the background noise
-        img = img.point(lambda p: 0 if p < 140 else 255)
+        # Thresholding: Turn the image into pure Black and White
+        # Removes the "gray fuzz" background
+        img = img.point(lambda p: 0 if p < 130 else 255)
 
-        # 4. Tesseract Configuration
-        # --psm 7: Treat as a single line of text
-        # whitelist: ONLY look for 0-123456789
+        # 3. Tesseract Config
+        # psm 7: Treats image as a single line of text
+        # whitelist: Forces Tesseract to ONLY see digits 0-9
         custom_config = r'--psm 7 -c tessedit_char_whitelist=0123456789'
         
-        code = pytesseract.image_to_string(img, config=custom_config).strip()
+        raw_text = pytesseract.image_to_string(img, config=custom_config)
         
-        # Remove any non-digits that might have slipped through
-        clean_code = "".join(filter(str.isdigit, code))
+        # Clean up any whitespace or newlines
+        clean_code = "".join(filter(str.isdigit, raw_text))
         
-        print(f"Solver: Tesseract identified -> {clean_code}")
+        print(f"   [Solver] Result: {clean_code}")
         return clean_code
 
     except Exception as e:
-        print(f"Captcha Solver Error: {e}")
+        print(f"   [Solver Error]: {e}")
         return ""
