@@ -1,126 +1,81 @@
 import requests
 from bs4 import BeautifulSoup
-import config
-import captcha_solver  
 import time
 import urllib3
 import base64
 from urllib.parse import urljoin
+import config
+import captcha_solver  
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def perform_login(game_id="orion"):
     session = requests.Session()
-    
-    # 1. Clean Headers
     session.headers = config.HEADERS.copy()
     
-    print(f"--- STARTING LOGIN FOR {game_id} ---")
+    # Map game IDs to URLs
+    url_map = {
+        "orion": "https://orionstars.vip:8781/default.aspx"
+    }
+    target_url = url_map.get(game_id, config.LOGIN_URL)
+
+    print(f"--- STARTING LOGIN FOR {game_id.upper()} ---")
     MAX_RETRIES = 5
     
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            print(f"Attempt {attempt} of {MAX_RETRIES}...")
-
-            # 2. Load Page
-            resp = session.get(config.LOGIN_URL, timeout=15, verify=False)
-            if resp.status_code != 200:
-                print(f"❌ Server rejected us. Code: {resp.status_code}")
-                time.sleep(2)
-                continue
-
+            print(f"Attempt {attempt}...")
+            resp = session.get(target_url, timeout=15, verify=False)
             soup = BeautifulSoup(resp.text, 'html.parser')
             
-            # --- FORM ACTION DETECTION ---
-            form_tag = soup.find('form')
-            submit_url = config.LOGIN_URL
-            if form_tag and form_tag.get('action'):
-                action_link = form_tag.get('action')
-                if action_link and action_link != "#":
-                    submit_url = urljoin(config.LOGIN_URL, action_link)
-            
-            # --- CAPTCHA FINDER ---
+            # --- CAPTCHA DETECTION ---
             captcha_bytes = None
             custom_url = None
-            
             base64_img = soup.find('img', src=lambda x: x and x.startswith('data:image'))
-            if base64_img:
-                try:
-                    captcha_bytes = base64.b64decode(base64_img['src'].split(',')[1])
-                except: pass
             
-            if not captcha_bytes:
-                img_tag = soup.find('img', src=lambda x: x and ('VerifyImagePage' in x or 'Image.aspx' in x or 'yzm' in x))
+            if base64_img:
+                captcha_bytes = base64.b64decode(base64_img['src'].split(',')[1])
+            else:
+                img_tag = soup.find('img', src=lambda x: x and ('VerifyImagePage' in x or 'Image.aspx' in x))
                 if img_tag:
-                    custom_url = urljoin(config.LOGIN_URL, img_tag['src'])
-                else:
-                    custom_url = config.CAPTCHA_URL
+                    custom_url = urljoin(target_url, img_tag['src'])
 
-            # 3. Solve Captcha
             captcha_code = captcha_solver.get_captcha_code(session, custom_url=custom_url, image_bytes=captcha_bytes)
-            print(f"--> Solved Captcha: {captcha_code}")
-
+            
             if not captcha_code:
-                print("❌ Captcha unreadable. Retrying...")
                 time.sleep(1)
                 continue
 
-            # 4. Submit
-            viewstate = soup.find("input", {"id": "__VIEWSTATE"})
-            viewstate_gen = soup.find("input", {"id": "__VIEWSTATEGENERATOR"})
+            # --- ASP.NET STATE DATA ---
+            viewstate = soup.find("input", {"id": "__VIEWSTATE"})['value']
+            viewstate_gen = soup.find("input", {"id": "__VIEWSTATEGENERATOR"})['value']
             ev_validation = soup.find("input", {"id": "__EVENTVALIDATION"})
-            
-            if not viewstate:
-                print("❌ Form fields missing.")
-                continue
+            ev_val = ev_validation['value'] if ev_validation else ""
 
-            # FIX: The "Kitchen Sink" Payload
-            # We send Name + Coordinates to ensure the server registers the click.
+            # --- PAYLOAD (Including the btnLogin fix) ---
             payload = {
-                '__VIEWSTATE': viewstate['value'],
-                '__VIEWSTATEGENERATOR': viewstate_gen['value'],
-                '__EVENTVALIDATION': ev_validation['value'] if ev_validation else "",
+                '__VIEWSTATE': viewstate,
+                '__VIEWSTATEGENERATOR': viewstate_gen,
+                '__EVENTVALIDATION': ev_val,
                 'txtCode': config.USERNAME,
                 'txtPassword': config.PASSWORD,
                 'txtYzm': captcha_code,
-                'btnLogin': 'Login',  # Added back!
-                'btnLogin.x': '45',   # Kept!
-                'btnLogin.y': '12'    # Kept!
+                'btnLogin': 'Login', # The button we found
+                'btnLogin.x': '45',
+                'btnLogin.y': '12'
             }
             
-            post_headers = {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Referer': config.LOGIN_URL,
-                'Origin': config.BASE_DOMAIN
-            }
-            session.headers.update(post_headers)
+            post_resp = session.post(target_url, data=payload, timeout=20, verify=False)
             
-            print(f"--> Posting to: {submit_url}")
-            post_resp = session.post(submit_url, data=payload, timeout=20, verify=False)
-            
-            # 5. Check Success
-            if "Store.aspx" in post_resp.url or "Store.aspx" in post_resp.text or post_resp.status_code == 302:
-                 print("✅ LOGIN SUCCESS! (Redirected to Store)")
+            if "Store.aspx" in post_resp.url or "Store.aspx" in post_resp.text:
+                 print("✅ LOGIN SUCCESS!")
                  return session 
             
-            # 6. Read Error
-            error_soup = BeautifulSoup(post_resp.text, 'html.parser')
-            alert_msg = error_soup.find("script", string=lambda x: x and "alert" in x)
-            error_span = error_soup.find("span", {"style": lambda x: x and "red" in x})
-            
-            if alert_msg:
-                print(f"⚠️ Website Alert: {alert_msg.string}")
-            elif error_span:
-                print(f"⚠️ Website Error: {error_span.get_text().strip()}")
-            else:
-                print(f"❌ Login Failed. Page Title: {error_soup.title.string if error_soup.title else 'Unknown'}")
-            
-            session.headers = config.HEADERS.copy()
-            time.sleep(2)
+            print("⚠️ Login failed (likely wrong captcha). Retrying...")
+            time.sleep(1)
             
         except Exception as e:
             print(f"❌ Error: {e}")
             time.sleep(2)
     
-    print("❌ ALL RETRIES FAILED.")
     return None
